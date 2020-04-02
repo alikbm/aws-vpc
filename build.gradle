@@ -1,0 +1,85 @@
+apply plugin: 'java'
+
+sourceCompatibility = 1.8
+
+
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath group: 'com.amazonaws', name: 'aws-java-sdk', version: '1.11.756'
+    }
+
+}
+
+import com.amazonaws.services.ec2.AmazonEC2
+import com.amazonaws.services.ec2.AmazonEC2ClientBuilder
+import com.amazonaws.services.ec2.model.DescribeVpcsRequest
+import com.amazonaws.services.ec2.model.DescribeVpcsResult
+import com.amazonaws.services.ec2.model.DescribeVpcPeeringConnectionsRequest
+import com.amazonaws.services.ec2.model.DescribeVpcPeeringConnectionsResult
+
+import com.amazonaws.services.ec2.model.Vpc
+import com.amazonaws.services.ec2.model.VpcPeeringConnection
+import com.amazonaws.auth.AWSCredentialsProvider
+import com.amazonaws.auth.profile.ProfileCredentialsProvider
+import com.amazonaws.auth.profile.ProfilesConfigFile
+
+tasks.register("vpc") {
+
+    group = 'AWS'
+    description = 'print pvc:s information'
+
+    doLast {
+
+        File configFile = new File(System.getProperty("user.home"), ".aws/credentials")
+        AWSCredentialsProvider credentialsProvider =
+                new ProfileCredentialsProvider( new ProfilesConfigFile(configFile), "default")
+
+        if (credentialsProvider.getCredentials() == null) {
+            throw new RuntimeException("No AWS security credentials found:\n"
+                    + "Make sure you've configured your credentials in: " + configFile.getAbsolutePath())
+        }
+
+        // Create the AmazonEC2 client so we can call various APIs.
+        AmazonEC2 client = AmazonEC2ClientBuilder.standard().build()
+
+        DescribeVpcsRequest request = new DescribeVpcsRequest()
+        DescribeVpcsResult response = client.describeVpcs(request)
+
+        DescribeVpcPeeringConnectionsRequest peeringRequest =
+                new DescribeVpcPeeringConnectionsRequest()
+        DescribeVpcPeeringConnectionsResult responsePeer =
+                client.describeVpcPeeringConnections(peeringRequest)
+        
+
+        for ( Vpc vpc : response.getVpcs()) {
+            System.out.printf(
+                    "Found VPCId %s |" +
+                            "with state %s |" +
+                            "with cidrBlock %s |" +
+                            "is default VPC %s |" +
+                            "and tags %s ",
+                    vpc.getVpcId(),
+                    vpc.getState(),
+                    vpc.getCidrBlock(),
+                    vpc.getIsDefault().toString(),
+                    vpc.getTags().toString() + "\n")
+        }
+
+        for ( VpcPeeringConnection vpcPeer : responsePeer.getVpcPeeringConnections()) {
+            System.out.printf(
+                    "Found VPC peer requester %s |" +
+                            "and VPC peer accepter %s |" +
+                            " with status %s |",
+                    vpcPeer.getRequesterVpcInfo().getVpcId(),
+                    vpcPeer.getAccepterVpcInfo().getVpcId(),
+                    vpcPeer.getStatus().getMessage()
+                    +"\n")
+        }
+
+    }
+}
